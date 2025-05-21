@@ -1,24 +1,30 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const userModel = require('../models/userModel');
 
 // Generate token
 const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET || 'secret', { expiresIn: '1d' });
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '1d' });
 };
 
 // Register user
 exports.registerUser = async (req, res) => {
   const { name, email, password } = req.body;
   try {
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
     const existing = await userModel.getUserByEmail(email);
     if (existing) return res.status(400).json({ error: 'User already exists' });
 
-    const user = await userModel.createUser(name, email, password);
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await userModel.createUser(name, email, hashedPassword);
     const token = generateToken(user.id);
 
     res.status(201).json({ user, token });
   } catch (error) {
-    res.status(400).json({ error: 'Registration failed', details: error.message });
+    res.status(500).json({ error: 'Registration failed', details: error.message });
   }
 };
 
@@ -27,9 +33,10 @@ exports.loginUser = async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await userModel.getUserByEmail(email);
-    if (!user || user.password !== password) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
     const token = generateToken(user.id);
     res.status(200).json({ message: 'Login successful', user: { id: user.id, name: user.name, email: user.email }, token });
@@ -74,7 +81,8 @@ exports.getUserById = async (req, res) => {
 exports.updateUser = async (req, res) => {
   const { name, email, password } = req.body;
   try {
-    const user = await userModel.updateUser(req.params.id, name, email, password);
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+    const user = await userModel.updateUser(req.params.id, name, email, hashedPassword);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (error) {
