@@ -1,4 +1,4 @@
-const { insertCow, fetchCows, updateCow } = require('../models/cowModel');
+const { insertCow, fetchCows, updateCow, deleteCow } = require('../models/cowModel');
 
 exports.addCow = async (req, res) => {
   const { tag_number, name, breed, date_of_birth, purchase_date } = req.body;
@@ -29,6 +29,19 @@ exports.editCow = async (req, res) => {
       return res.status(404).json({ error: 'Cow not found or not owned by user' });
     }
     res.json(cow);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.deleteCow = async (req, res) => {
+  const cowId = req.params.id;
+  try {
+    const cow = await deleteCow(cowId, req.user.id);
+    if (!cow) {
+      return res.status(404).json({ error: 'Cow not found or not owned by user' });
+    }
+    res.json({ message: 'Cow deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
